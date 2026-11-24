@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Five ways JWT validation fails, and how to test for them · Charitha Reddy</title>
+<meta name="description" content="I built a small auditor and a deliberately broken API to demonstrate the JWT flaws that keep reaching production: alg:none, weak secrets, algorithm confusion, missing expiry and unverified signatures.">
+<meta name="author" content="Charitha Reddy">
+<link rel="canonical" href="https://charithareddymr.github.io/posts/jwt-validation-failures.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Five ways JWT validation fails, and how to test for them · Charitha Reddy">
+<meta property="og:description" content="I built a small auditor and a deliberately broken API to demonstrate the JWT flaws that keep reaching production: alg:none, weak secrets, algorithm confusion, missing expiry and unverified signatures.">
+<meta property="og:url" content="https://charithareddymr.github.io/posts/jwt-validation-failures.html">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23121519'/%3E%3Ctext x='32' y='42' font-family='monospace' font-size='26' font-weight='700' fill='%23fbfbf9' text-anchor='middle'%3ECR%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script>
+  try { var t = localStorage.getItem('theme'); } catch (e) {}
+  document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="../index.html"><b>Charitha Reddy</b><span>security engineering</span></a>
+    <nav>
+      <a href="../index.html#writing" class="hide-sm">Writing</a>
+      <a href="../projects.html" class="hide-sm">Projects</a>
+      <a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="toggle" id="toggle" aria-label="Toggle dark mode">☾</button>
+    </nav>
+  </header>
+
+  <article class="post">
+    <a class="back" href="../index.html#writing">← All writing</a>
+    <div class="post-meta">
+      <span class="id">CR-2026-005</span>
+      <span class="tag t-appsec">APPSEC</span>
+      <span>3 min read</span>
+    </div>
+    <h1>Five ways JWT validation fails, and how to test for them</h1>
+    <p class="lede">A JSON Web Token carries, in its own header, the name of the algorithm used to sign it. The original sin of many JWT libraries is trusting that header, letting the token choose how it gets checked. From that one mistake grows a whole family of attacks. I built a tool that automates five of them against a target you&#x27;re authorized to test, each paired with its fix.</p>
+    
+<h2>The setup</h2>
+<p>To test a scanner you need something broken to point it at. So the project ships a small local API with two modes: a <strong>vulnerable</strong> build that makes the classic mistakes, and a <strong>secure</strong> build that fixes them. It binds to <code>127.0.0.1</code> and is a practice target in the spirit of OWASP Juice Shop. The auditor logs in as a low-privilege user and checks whether any token manipulation lets that user reach an admin-only endpoint. A flaw is only reported when the forged token actually reaches <code>/admin</code>, not merely when it's accepted, which keeps false positives down.</p>
+<pre><code>Vulnerable build:  3 vulnerabilities found across 5 checks
+Secure build:      0 vulnerabilities found across 5 checks</code></pre>
+
+<h2>1. alg: none</h2>
+<p>The token header says <code>"alg": "none"</code> and carries no signature. A verifier that honours it accepts unsigned tokens, so a normal user can mint one that says <code>role: admin</code>. The fix is to pin the accepted algorithm server-side and never let the header decide.</p>
+
+<h2>2. Weak HMAC secret</h2>
+<p>HS256 tokens are signed with a shared secret. If that secret is something like <code>secret</code> or <code>changeme</code>, it can be guessed offline against a token you already hold, no server interaction needed. Once guessed, you can forge anything. The auditor brute-forces the real token against a common-secret list, and if it wins, signs its own admin token. The fix: a long random secret from a secret manager, or move to RS256/ES256 so there's no shared secret at all.</p>
+
+<h2>3. RS/HS algorithm confusion</h2>
+<p>This is the subtle one. A service that issues RS256 tokens verifies them with its RSA <em>public</em> key, which is not secret and is often published at a JWKS endpoint. If the verifier trusts the header, an attacker can send an <strong>HS256</strong> token signed with that public key as the HMAC secret. The server, following the header, uses the same public key to verify the HMAC, and it matches.</p>
+<p>Building this token is itself instructive: PyJWT refuses to use an RSA key as an HMAC secret, exactly the mistake being tested, so the tool constructs the token by hand.</p>
+<pre><code>def _hs256_with_key(payload, key_bytes):
+    header = b64url(b'{"alg":"HS256","typ":"JWT"}')
+    body   = b64url(json.dumps(payload).encode())
+    sig    = hmac.new(key_bytes, f"{header}.{body}".encode(), hashlib.sha256).digest()
+    return f"{header}.{body}.{b64url(sig)}"</code></pre>
+<p>The fix is to pin the algorithm to the asymmetric one you issue and reject HMAC algorithms on verification.</p>
+
+<h2>4. Missing or unenforced expiry</h2>
+<p>A token with no <code>exp</code> claim is valid forever, so a single stolen token never stops working. Even with an <code>exp</code>, the verifier has to actually check it. The auditor flags a missing expiry, and where it can, forges an already-expired token to see if the server still accepts it. Against an RS256 service it can't re-sign without the private key, so it reports that limitation honestly rather than guessing.</p>
+
+<h2>5. Signature not verified</h2>
+<p>The bluntest flaw: the server reads the claims but never checks the signature. The auditor changes the payload (<code>role</code> to <code>admin</code>), keeps the original signature, and sends it. If that's accepted, the signature is decorative. Always verify the signature before trusting any claim.</p>
+
+<h2>What I took from it</h2>
+<p>Every one of these reduces to the same root cause: <strong>the verifier trusting input it should have pinned.</strong> The defender's version of JWT handling is short and boring, pin the algorithm, verify with the right key, require <code>exp</code>, <code>iss</code> and <code>aud</code>, and that's most of the battle. Writing the attacks made the defenses concrete in a way that reading the RFC didn't. The project has 8 automated tests and a CI pipeline, so the before/after (3 vulnerabilities to 0) is checked on every push.</p>
+
+    <div class="repo"><span>Code, tests and full results</span><a href="https://github.com/charithareddymr/jwt-auditor" target="_blank" rel="noopener">jwt-auditor on GitHub ↗</a></div>
+    <h2>More writing</h2>
+    <ul><li><a class="inline" href="bot-iot-row-id-leakage.html">The row ID that scored 100%: data leakage in the Bot-IoT dataset</a></li><li><a class="inline" href="indirect-prompt-injection-rag.html">Hiding instructions in a document: indirect prompt injection in a RAG chatbot</a></li><li><a class="inline" href="access-control-in-retrieval.html">Access control belongs in the retrieval layer, not the prompt</a></li><li><a class="inline" href="guardduty-auto-containment.html">Quarantining a compromised EC2 instance in seconds with GuardDuty and Lambda</a></li><li><a class="inline" href="owasp-top-10-hands-on.html">Working the OWASP Top 10 by hand: PortSwigger and TryHackMe</a></li><li><a class="inline" href="tryhackme-vulnversity.html">TryHackMe Vulnversity: enumeration to root</a></li></ul>
+  </article>
+
+  <footer>
+    <span>© 2026 Charitha Reddy</span>
+    <div><a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a><a href="https://www.linkedin.com/in/charitha-reddy-896204201" target="_blank" rel="noopener">LinkedIn ↗</a></div>
+  </footer>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('toggle');
+    function paint() { btn.textContent = root.dataset.theme === 'dark' ? '☀' : '☾'; }
+    paint();
+    btn.onclick = function () {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+      paint();
+    };
+  })();
+</script>
+</body>
+</html>

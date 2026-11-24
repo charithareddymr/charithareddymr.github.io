@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Projects · Charitha Reddy</title>
+<meta name="description" content="Things Charitha Reddy has built: AI security, cloud incident response and ML security projects.">
+<meta name="author" content="Charitha Reddy">
+<link rel="canonical" href="https://charithareddymr.github.io/projects.html">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Projects · Charitha Reddy">
+<meta property="og:description" content="Things Charitha Reddy has built: AI security, cloud incident response and ML security projects.">
+<meta property="og:url" content="https://charithareddymr.github.io/projects.html">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23121519'/%3E%3Ctext x='32' y='42' font-family='monospace' font-size='26' font-weight='700' fill='%23fbfbf9' text-anchor='middle'%3ECR%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script>
+  try { var t = localStorage.getItem('theme'); } catch (e) {}
+  document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="index.html"><b>Charitha Reddy</b><span>security engineering</span></a>
+    <nav>
+      <a href="index.html#writing" class="hide-sm">Writing</a>
+      <a href="projects.html" class="hide-sm">Projects</a>
+      <a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="toggle" id="toggle" aria-label="Toggle dark mode">☾</button>
+    </nav>
+  </header>
+
+  <section class="post projects-page">
+    <a class="back" href="index.html">← Home</a>
+    <p class="label" style="margin-top:34px">Things I’ve made</p>
+    <h1>Projects</h1>
+    <p class="lede">Tools and experiments, each built to understand how something breaks and how to defend it. Code, tests and results for all of them are on GitHub.</p>
+    <ol class="plist">
+      <li class="prow">
+        <span class="pnum">01</span>
+        <div class="pbody">
+          <a href="https://github.com/charithareddymr/jwt-auditor" target="_blank" rel="noopener"><h3>jwt-auditor ↗</h3></a>
+          <p>A JWT/OAuth security tester with a deliberately vulnerable demo API. Checks for alg:none, weak secrets, RS/HS algorithm confusion, missing expiry and unverified signatures. 3 vulns on the broken build, 0 on the fixed one.</p>
+          <p class="plink"><a class="inline" href="posts/jwt-validation-failures.html">Read the write-up</a></p>
+        </div>
+        <span class="pcat">APPSEC</span>
+      </li>
+      <li class="prow">
+        <span class="pnum">02</span>
+        <div class="pbody">
+          <a href="https://github.com/charithareddymr/secure-rag-chatbot" target="_blank" rel="noopener"><h3>secure-rag-chatbot ↗</h3></a>
+          <p>A local-LLM chatbot with access control enforced in the vector database and four layers of prompt-injection defense, tested by 40 automated attacks.</p>
+          <p class="plink"><a class="inline" href="posts/indirect-prompt-injection-rag.html">Read the write-up</a></p>
+        </div>
+        <span class="pcat">AI SECURITY</span>
+      </li>
+      <li class="prow">
+        <span class="pnum">03</span>
+        <div class="pbody">
+          <a href="https://github.com/charithareddymr/aws-threat-containment" target="_blank" rel="noopener"><h3>aws-threat-containment ↗</h3></a>
+          <p>Automated GuardDuty incident response: quarantines compromised EC2 instances, snapshots disks for forensics, and disables leaked access keys.</p>
+          <p class="plink"><a class="inline" href="posts/guardduty-auto-containment.html">Read the write-up</a></p>
+        </div>
+        <span class="pcat">CLOUD</span>
+      </li>
+      <li class="prow">
+        <span class="pnum">04</span>
+        <div class="pbody">
+          <a href="https://github.com/charithareddymr/iot-botnet-detection" target="_blank" rel="noopener"><h3>iot-botnet-detection ↗</h3></a>
+          <p>Five ML models on Bot-IoT with leakage-aware evaluation; shows the row ID alone scores a perfect 1.000.</p>
+          <p class="plink"><a class="inline" href="posts/bot-iot-row-id-leakage.html">Read the write-up</a></p>
+        </div>
+        <span class="pcat">ML SECURITY</span>
+      </li>
+      <li class="prow">
+        <span class="pnum">05</span>
+        <div class="pbody">
+          <a href="https://github.com/charithareddymr/fake-news-detection" target="_blank" rel="noopener"><h3>fake-news-detection ↗</h3></a>
+          <p>Team project comparing TF-IDF, RNN, LSTM and DistilBERT; I fixed a collapsed RNN and led the error analysis.</p>
+          
+        </div>
+        <span class="pcat">TEAM</span>
+      </li>
+    </ol>
+  </section>
+
+  <footer>
+    <span>© 2026 Charitha Reddy</span>
+    <div><a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a><a href="https://www.linkedin.com/in/charitha-reddy-896204201" target="_blank" rel="noopener">LinkedIn ↗</a></div>
+  </footer>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('toggle');
+    function paint() { btn.textContent = root.dataset.theme === 'dark' ? '☀' : '☾'; }
+    paint();
+    btn.onclick = function () {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+      paint();
+    };
+  })();
+</script>
+</body>
+</html>

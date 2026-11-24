@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The row ID that scored 100%: data leakage in the Bot-IoT dataset · Charitha Reddy</title>
+<meta name="description" content="A Random Forest that sees only the row number scores a perfect 1.000 on Bot-IoT. How I found it, what it means for published results, and the honest detector I built instead.">
+<meta name="author" content="Charitha Reddy">
+<link rel="canonical" href="https://charithareddymr.github.io/posts/bot-iot-row-id-leakage.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="The row ID that scored 100%: data leakage in the Bot-IoT dataset · Charitha Reddy">
+<meta property="og:description" content="A Random Forest that sees only the row number scores a perfect 1.000 on Bot-IoT. How I found it, what it means for published results, and the honest detector I built instead.">
+<meta property="og:url" content="https://charithareddymr.github.io/posts/bot-iot-row-id-leakage.html">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23121519'/%3E%3Ctext x='32' y='42' font-family='monospace' font-size='26' font-weight='700' fill='%23fbfbf9' text-anchor='middle'%3ECR%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script>
+  try { var t = localStorage.getItem('theme'); } catch (e) {}
+  document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="../index.html"><b>Charitha Reddy</b><span>security engineering</span></a>
+    <nav>
+      <a href="../index.html#writing" class="hide-sm">Writing</a>
+      <a href="../projects.html" class="hide-sm">Projects</a>
+      <a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="toggle" id="toggle" aria-label="Toggle dark mode">☾</button>
+    </nav>
+  </header>
+
+  <article class="post">
+    <a class="back" href="../index.html#writing">← All writing</a>
+    <div class="post-meta">
+      <span class="id">CR-2026-004</span>
+      <span class="tag t-research">RESEARCH</span>
+      <span>3 min read</span>
+    </div>
+    <h1>The row ID that scored 100%: data leakage in the Bot-IoT dataset</h1>
+    <p class="lede">I rebuilt an old IoT botnet-detection project and, before training anything, tested each column on its own. One of them, the dataset&#x27;s row ID, separated attacks from normal traffic perfectly. Here&#x27;s how that happens, why many reported scores on this dataset deserve suspicion, and what an honest evaluation looks like.</p>
+    
+<h2>The dataset</h2>
+<p><a class="inline" href="https://research.unsw.edu.au/projects/bot-iot-dataset" target="_blank" rel="noopener">Bot-IoT</a> was recorded in a UNSW Canberra cyber range: simulated IoT devices, normal traffic and botnet attacks. I used the authors' 5% extract with their "10-best features" and official train/test split: 2,934,817 training rows and 733,705 test rows.</p>
+<p>The first thing the data tells you is how lopsided it is:</p>
+<table>
+<tr><th>Class</th><th class="num">Training rows</th><th class="num">Share</th></tr>
+<tr><td>DDoS</td><td class="num">1,541,315</td><td class="num">52.52%</td></tr>
+<tr><td>DoS</td><td class="num">1,320,148</td><td class="num">44.98%</td></tr>
+<tr><td>Reconnaissance</td><td class="num">72,919</td><td class="num">2.48%</td></tr>
+<tr><td>Normal</td><td class="num">370</td><td class="num">0.013%</td></tr>
+<tr><td>Theft</td><td class="num">65</td><td class="num">0.002%</td></tr>
+</table>
+
+<h2>Trap one: accuracy</h2>
+<p>The test set contains 107 normal flows out of 733,705. A "model" that answers <em>attack</em> for everything scores <strong>99.985% accuracy</strong> while recognising none of them. Any result on this dataset quoted as accuracy alone tells you almost nothing, so I compared models on balanced accuracy, macro F1, and two numbers a security team actually cares about: the false-positive rate (normal traffic flagged as an attack) and the attack detection rate.</p>
+
+<h2>Trap two: leakage</h2>
+<p>Before training a real model, I ran a simple screen: train a tiny decision tree on <em>one column at a time</em> and measure balanced accuracy, where 0.5 is a coin flip. A column that predicts the label almost perfectly on its own is either the most informative feature in the world or something that shouldn't be a feature at all.</p>
+<pre><code>for col in columns:
+    x = encode(sample[col]).reshape(-1, 1)
+    tree = DecisionTreeClassifier(max_depth=3, class_weight="balanced")
+    tree.fit(x_train, y_train)
+    score = balanced_accuracy_score(y_test, tree.predict(x_test))</code></pre>
+<table>
+<tr><th>Column</th><th class="num">Score alone</th><th>What it is</th></tr>
+<tr class="hl"><td><code>pkSeqID</code></td><td class="num">1.000</td><td>Row ID</td></tr>
+<tr><td><code>N_IN_Conn_P_DstIP</code></td><td class="num">0.990</td><td>Inbound connections per destination IP</td></tr>
+<tr><td><code>dport</code></td><td class="num">0.973</td><td>Destination port</td></tr>
+<tr><td><code>N_IN_Conn_P_SrcIP</code></td><td class="num">0.965</td><td>Inbound connections per source IP</td></tr>
+<tr><td><code>daddr</code></td><td class="num">0.962</td><td>Destination IP address</td></tr>
+<tr><td><code>seq</code></td><td class="num">0.913</td><td>Argus record sequence number</td></tr>
+<tr><td><code>srate</code></td><td class="num">0.907</td><td>Source packets per second</td></tr>
+</table>
+<p>A row number carries no information about network behaviour. It scores perfectly because of how the dataset was assembled: normal and attack records were captured and numbered in separate blocks, so the ID encodes the label. IP addresses and ports behave similarly. They identify the lab's victim machines and attack setup, which a model memorises and which won't exist on any other network.</p>
+
+<h2>Measuring the inflation</h2>
+<p>To put numbers on it, I retrained the best model (Random Forest) four ways and evaluated each on the same untouched test set:</p>
+<table>
+<tr><th>Experiment</th><th class="num">Balanced acc.</th><th class="num">Macro F1</th><th class="num">False positives</th><th>Relied on most</th></tr>
+<tr><td>A. Behavioural features only</td><td class="num">0.979</td><td class="num">0.957</td><td class="num">1.87%</td><td><code>srate</code></td></tr>
+<tr><td>B. + identifier columns</td><td class="num">1.000</td><td class="num">0.992</td><td class="num">0.00%</td><td><code>pkSeqID</code></td></tr>
+<tr class="hl"><td>C. Row ID only</td><td class="num">1.000</td><td class="num">0.999</td><td class="num">0.00%</td><td><code>pkSeqID</code></td></tr>
+<tr><td>D. No whole-capture counts</td><td class="num">0.862</td><td class="num">0.764</td><td class="num">21.50%</td><td><code>srate</code></td></tr>
+</table>
+<div class="callout"><p>Experiment C is the finding: a model that knows nothing about network traffic beats every honest model. When a paper reports near-perfect results on Bot-IoT without saying which columns were removed, it may be measuring the dataset's numbering, not attack detection.</p></div>
+<p>Experiment D is the uncomfortable follow-up. The two connection-count features are counted over the <em>entire</em> capture. They're real behavioural signals (floods produce huge connection counts), but a detector running live wouldn't have whole-capture totals up front. Without them, the false-positive rate jumps from 1.87% to 21.5%. A deployable version would need those counts computed over a sliding time window.</p>
+
+<h2>The honest results</h2>
+<p>With identifiers removed, training-only rebalancing (cap the huge classes, oversample the rare ones; the test set is never touched) and five models on 14 behavioural features:</p>
+<table>
+<tr><th>Model</th><th class="num">Balanced acc.</th><th class="num">Macro F1</th><th class="num">False positives</th><th class="num">Train time</th></tr>
+<tr class="hl"><td>Random Forest</td><td class="num">0.979</td><td class="num">0.957</td><td class="num">1.87%</td><td class="num">3 s</td></tr>
+<tr><td>KNN</td><td class="num">0.974</td><td class="num">0.917</td><td class="num">2.80%</td><td class="num">&lt;1 s</td></tr>
+<tr><td>AdaBoost</td><td class="num">0.936</td><td class="num">0.880</td><td class="num">1.87%</td><td class="num">56 s</td></tr>
+<tr><td>MLP</td><td class="num">0.945</td><td class="num">0.770</td><td class="num">3.74%</td><td class="num">14 s</td></tr>
+<tr><td>LSTM</td><td class="num">0.932</td><td class="num">0.523</td><td class="num">2.80%</td><td class="num">46 s</td></tr>
+</table>
+<p>Two details are worth pointing out. Random Forest's plain accuracy (99.62%) is <em>lower</em> than the always-attack baseline, yet it's by far the better detector. And the LSTM's recall looks fine class by class, but it labels about 0.23% of attacks as normal. That's roughly 1,670 attacks hiding in a "normal" bucket that genuinely holds only 107 flows, which is why its macro F1 is 0.52. The deep sequence model was slower and worse than a Random Forest on tabular flow features.</p>
+
+<h2>A checklist I'll reuse</h2>
+<ol>
+<li><strong>Report per-class metrics</strong>, never accuracy alone, whenever classes are imbalanced.</li>
+<li><strong>Run a single-feature screen</strong> before modelling. Anything near-perfect on its own needs an explanation.</li>
+<li><strong>Ask whether each feature exists at detection time.</strong> Whole-dataset aggregates often don't.</li>
+<li><strong>Rebalance training data only</strong>; evaluate on the real class mix.</li>
+<li><strong>Be honest about sample size.</strong> My 1.87% false-positive rate is 2 of 107 flows; one more error moves it by about a point.</li>
+</ol>
+
+    <div class="repo"><span>Code, tests and full results</span><a href="https://github.com/charithareddymr/iot-botnet-detection" target="_blank" rel="noopener">iot-botnet-detection on GitHub ↗</a></div>
+    <h2>More writing</h2>
+    <ul><li><a class="inline" href="jwt-validation-failures.html">Five ways JWT validation fails, and how to test for them</a></li><li><a class="inline" href="indirect-prompt-injection-rag.html">Hiding instructions in a document: indirect prompt injection in a RAG chatbot</a></li><li><a class="inline" href="access-control-in-retrieval.html">Access control belongs in the retrieval layer, not the prompt</a></li><li><a class="inline" href="guardduty-auto-containment.html">Quarantining a compromised EC2 instance in seconds with GuardDuty and Lambda</a></li><li><a class="inline" href="owasp-top-10-hands-on.html">Working the OWASP Top 10 by hand: PortSwigger and TryHackMe</a></li><li><a class="inline" href="tryhackme-vulnversity.html">TryHackMe Vulnversity: enumeration to root</a></li></ul>
+  </article>
+
+  <footer>
+    <span>© 2026 Charitha Reddy</span>
+    <div><a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a><a href="https://www.linkedin.com/in/charitha-reddy-896204201" target="_blank" rel="noopener">LinkedIn ↗</a></div>
+  </footer>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('toggle');
+    function paint() { btn.textContent = root.dataset.theme === 'dark' ? '☀' : '☾'; }
+    paint();
+    btn.onclick = function () {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+      paint();
+    };
+  })();
+</script>
+</body>
+</html>

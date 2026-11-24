@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TryHackMe Vulnversity: enumeration to root · Charitha Reddy</title>
+<meta name="description" content="A walkthrough of the Vulnversity room: port scanning, directory brute-forcing, a file-upload filter bypass for a reverse shell, and a SUID privilege escalation to root.">
+<meta name="author" content="Charitha Reddy">
+<link rel="canonical" href="https://charithareddymr.github.io/posts/tryhackme-vulnversity.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="TryHackMe Vulnversity: enumeration to root · Charitha Reddy">
+<meta property="og:description" content="A walkthrough of the Vulnversity room: port scanning, directory brute-forcing, a file-upload filter bypass for a reverse shell, and a SUID privilege escalation to root.">
+<meta property="og:url" content="https://charithareddymr.github.io/posts/tryhackme-vulnversity.html">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23121519'/%3E%3Ctext x='32' y='42' font-family='monospace' font-size='26' font-weight='700' fill='%23fbfbf9' text-anchor='middle'%3ECR%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script>
+  try { var t = localStorage.getItem('theme'); } catch (e) {}
+  document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="../index.html"><b>Charitha Reddy</b><span>security engineering</span></a>
+    <nav>
+      <a href="../index.html#writing" class="hide-sm">Writing</a>
+      <a href="../projects.html" class="hide-sm">Projects</a>
+      <a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="toggle" id="toggle" aria-label="Toggle dark mode">☾</button>
+    </nav>
+  </header>
+
+  <article class="post">
+    <a class="back" href="../index.html#writing">← All writing</a>
+    <div class="post-meta">
+      <span class="id">CR-2025-001</span>
+      <span class="tag t-lab">LAB</span>
+      <span>1 min read</span>
+    </div>
+    <h1>TryHackMe Vulnversity: enumeration to root</h1>
+    <p class="lede">Vulnversity is a beginner boot-to-root room on TryHackMe and a clean tour of the basic offensive workflow: enumerate, find a foothold, escalate. I did it during my internship as an early hands-on box. This is the path, with flag values left out.</p>
+    
+<h2>1. Enumeration</h2>
+<p>Everything starts with a port scan. <code>nmap -sV -p-</code> turns up FTP, SSH, Samba, a Squid proxy, and an HTTP server on the non-standard port <strong>3333</strong>. The lesson the room drives home is to read the services before touching them; the web app on 3333 is the way in.</p>
+<pre><code>nmap -sV -sC -p- &lt;target-ip&gt;</code></pre>
+
+<h2>2. Directory brute-forcing</h2>
+<p>The site has little on the surface, so I brute-forced paths with Gobuster. That surfaced an <code>/internal/</code> directory holding a file-upload form, exactly the kind of feature worth poking at.</p>
+<pre><code>gobuster dir -u http://&lt;target-ip&gt;:3333 -w /usr/share/wordlists/dirb/common.txt</code></pre>
+
+<h2>3. Bypassing the upload filter</h2>
+<p>The upload form tries to block executable files by extension, but the block-list is incomplete. PHP won't upload, yet an alternate PHP extension such as <code>.phtml</code> sails through, a textbook block-list failure. I uploaded a PHP reverse shell renamed with the allowed extension and started a listener.</p>
+<pre><code>nc -lnvp 4444          # listener
+# browse to the uploaded file to trigger the shell</code></pre>
+<p>That lands a shell as the <code>www-data</code> web user, enough to read the first flag.</p>
+
+<h2>4. Privilege escalation via SUID</h2>
+<p>From the low-privilege shell, the standard move is to look for SUID binaries, programs that run as their owner (often root) regardless of who launches them.</p>
+<pre><code>find / -perm -u=s -type f 2>/dev/null</code></pre>
+<p>The interesting result is <code>/bin/systemctl</code> with the SUID bit set. <a class="inline" href="https://gtfobins.github.io/" target="_blank" rel="noopener">GTFOBins</a> documents the technique: write a small systemd service whose <code>ExecStart</code> runs a command of your choosing, then start it through the SUID <code>systemctl</code> so it executes as root. I used it to read the root flag.</p>
+
+<h2>What it teaches</h2>
+<p>Vulnversity is simple, but the shape is the same on every machine I've touched since: thorough enumeration beats cleverness, input filters that block-list instead of allow-list tend to fail, and a single over-privileged binary can undo everything else. From the defender's side, the fixes are the mirror image, allow-list uploads and validate content type, and never leave <code>systemctl</code> (or any shell-capable binary) SUID-root.</p>
+
+    
+    <h2>More writing</h2>
+    <ul><li><a class="inline" href="jwt-validation-failures.html">Five ways JWT validation fails, and how to test for them</a></li><li><a class="inline" href="bot-iot-row-id-leakage.html">The row ID that scored 100%: data leakage in the Bot-IoT dataset</a></li><li><a class="inline" href="indirect-prompt-injection-rag.html">Hiding instructions in a document: indirect prompt injection in a RAG chatbot</a></li><li><a class="inline" href="access-control-in-retrieval.html">Access control belongs in the retrieval layer, not the prompt</a></li><li><a class="inline" href="guardduty-auto-containment.html">Quarantining a compromised EC2 instance in seconds with GuardDuty and Lambda</a></li><li><a class="inline" href="owasp-top-10-hands-on.html">Working the OWASP Top 10 by hand: PortSwigger and TryHackMe</a></li></ul>
+  </article>
+
+  <footer>
+    <span>© 2026 Charitha Reddy</span>
+    <div><a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a><a href="https://www.linkedin.com/in/charitha-reddy-896204201" target="_blank" rel="noopener">LinkedIn ↗</a></div>
+  </footer>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('toggle');
+    function paint() { btn.textContent = root.dataset.theme === 'dark' ? '☀' : '☾'; }
+    paint();
+    btn.onclick = function () {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+      paint();
+    };
+  })();
+</script>
+</body>
+</html>

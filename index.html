@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Charitha Reddy — Security Engineering</title>
+<meta name="description" content="Charitha Reddy: application and cloud security engineer. Writing and projects on AI security, cloud incident response and ML for intrusion detection.">
+<meta name="author" content="Charitha Reddy">
+<link rel="canonical" href="https://charithareddymr.github.io/">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Charitha Reddy — Security Engineering">
+<meta property="og:description" content="Charitha Reddy: application and cloud security engineer. Writing and projects on AI security, cloud incident response and ML for intrusion detection.">
+<meta property="og:url" content="https://charithareddymr.github.io/">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23121519'/%3E%3Ctext x='32' y='42' font-family='monospace' font-size='26' font-weight='700' fill='%23fbfbf9' text-anchor='middle'%3ECR%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/site.css">
+<script>
+  try { var t = localStorage.getItem('theme'); } catch (e) {}
+  document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="index.html"><b>Charitha Reddy</b><span>security engineering</span></a>
+    <nav>
+      <a href="index.html#writing" class="hide-sm">Writing</a>
+      <a href="projects.html" class="hide-sm">Projects</a>
+      <a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="toggle" id="toggle" aria-label="Toggle dark mode">☾</button>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <p class="label">Application &amp; cloud security · /home/charithareddymr</p>
+    <h1>Hi, I’m Charitha.</h1>
+    <p class="bio">I'm an application and cloud security engineer finishing an M.S. in Computer Science (AI/ML) at the University at Buffalo. I spent 3+ years at Cognizant securing systems for JPMorgan Chase and T-Mobile: threat modeling, secure code review, pentesting and identity. Now I focus on how AI systems break, and how to defend them.</p>
+  </section>
+
+  <div class="grid">
+    <main id="writing">
+      <h2 class="sec">Writing</h2>
+      <article class="entry">
+        <span class="id">CR-2026-005</span>
+        <a href="posts/jwt-validation-failures.html"><h3>Five ways JWT validation fails, and how to test for them</h3></a>
+        <span class="tag t-appsec">APPSEC</span>
+        <p>I built a small auditor and a deliberately broken API to demonstrate the JWT flaws that keep reaching production: alg:none, weak secrets, algorithm confusion, missing expiry and unverified signatures.</p>
+        <div class="meta"><span>3 min read</span></div>
+      </article>
+      <article class="entry">
+        <span class="id">CR-2026-004</span>
+        <a href="posts/bot-iot-row-id-leakage.html"><h3>The row ID that scored 100%: data leakage in the Bot-IoT dataset</h3></a>
+        <span class="tag t-research">RESEARCH</span>
+        <p>A Random Forest that sees only the row number scores a perfect 1.000 on Bot-IoT. How I found it, what it means for published results, and the honest detector I built instead.</p>
+        <div class="meta"><span>3 min read</span></div>
+      </article>
+      <article class="entry">
+        <span class="id">CR-2026-003</span>
+        <a href="posts/indirect-prompt-injection-rag.html"><h3>Hiding instructions in a document: indirect prompt injection in a RAG chatbot</h3></a>
+        <span class="tag t-ai">AI SECURITY</span>
+        <p>I planted a poisoned password guide in my chatbot&#x27;s knowledge base, then built four defense layers so it couldn&#x27;t send users to a fake helpdesk. What worked, and what pattern-matching can&#x27;t catch.</p>
+        <div class="meta"><span>3 min read</span></div>
+      </article>
+      <article class="entry">
+        <span class="id">CR-2025-002</span>
+        <a href="posts/owasp-top-10-hands-on.html"><h3>Working the OWASP Top 10 by hand: PortSwigger and TryHackMe</h3></a>
+        <span class="tag t-lab">LAB</span>
+        <p>Notes from the PortSwigger Web Security Academy and TryHackMe&#x27;s OWASP Top 10 room: six vulnerability classes, how each exploit actually works, and the fix I&#x27;d push for as a defender.</p>
+        <div class="meta"><span>3 min read</span></div>
+      </article>
+      <article class="entry">
+        <span class="id">CR-2025-001</span>
+        <a href="posts/tryhackme-vulnversity.html"><h3>TryHackMe Vulnversity: enumeration to root</h3></a>
+        <span class="tag t-lab">LAB</span>
+        <p>A walkthrough of the Vulnversity room: port scanning, directory brute-forcing, a file-upload filter bypass for a reverse shell, and a SUID privilege escalation to root.</p>
+        <div class="meta"><span>1 min read</span></div>
+      </article>
+    </main>
+    <aside>
+      <section id="projects">
+        <h2 class="sec">Things I’ve made</h2>
+        <ul class="proj"><li><a href="https://github.com/charithareddymr/jwt-auditor" target="_blank" rel="noopener">jwt-auditor ↗</a><span class="d">JWT/OAuth security tester: checks for alg:none, weak secrets, algorithm confusion and more, with a vulnerable demo API</span></li><li><a href="https://github.com/charithareddymr/secure-rag-chatbot" target="_blank" rel="noopener">secure-rag-chatbot ↗</a><span class="d">LLM chatbot with retrieval-layer access control and four prompt-injection defenses; 40 attack tests</span></li><li><a href="https://github.com/charithareddymr/aws-threat-containment" target="_blank" rel="noopener">aws-threat-containment ↗</a><span class="d">Automated GuardDuty response: EC2 quarantine, forensic snapshots, key deactivation</span></li><li><a href="https://github.com/charithareddymr/iot-botnet-detection" target="_blank" rel="noopener">iot-botnet-detection ↗</a><span class="d">5 models on Bot-IoT with leakage-aware evaluation</span></li><li><a href="https://github.com/charithareddymr/fake-news-detection" target="_blank" rel="noopener">fake-news-detection ↗</a><span class="d">Team project: RNN, LSTM and DistilBERT; I fixed the RNN and led error analysis</span></li></ul>
+        <a class="all" href="projects.html">All projects →</a>
+      </section>
+      <section>
+        <h2 class="sec">Certifications</h2>
+        <ul><li>CompTIA Security+</li><li>AWS Certified Security – Specialty</li><li>Azure Security Engineer (AZ-500)</li></ul>
+      </section>
+      <section>
+        <h2 class="sec">Elsewhere</h2>
+        <ul>
+          <li><a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a></li>
+          <li><a href="https://www.linkedin.com/in/charitha-reddy-896204201" target="_blank" rel="noopener">LinkedIn ↗</a></li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+
+  <footer>
+    <span>© 2026 Charitha Reddy</span>
+    <div><a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a><a href="https://www.linkedin.com/in/charitha-reddy-896204201" target="_blank" rel="noopener">LinkedIn ↗</a></div>
+  </footer>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('toggle');
+    function paint() { btn.textContent = root.dataset.theme === 'dark' ? '☀' : '☾'; }
+    paint();
+    btn.onclick = function () {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+      paint();
+    };
+  })();
+</script>
+</body>
+</html>

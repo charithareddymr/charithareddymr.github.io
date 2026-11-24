@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Working the OWASP Top 10 by hand: PortSwigger and TryHackMe · Charitha Reddy</title>
+<meta name="description" content="Notes from the PortSwigger Web Security Academy and TryHackMe&#x27;s OWASP Top 10 room: six vulnerability classes, how each exploit actually works, and the fix I&#x27;d push for as a defender.">
+<meta name="author" content="Charitha Reddy">
+<link rel="canonical" href="https://charithareddymr.github.io/posts/owasp-top-10-hands-on.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Working the OWASP Top 10 by hand: PortSwigger and TryHackMe · Charitha Reddy">
+<meta property="og:description" content="Notes from the PortSwigger Web Security Academy and TryHackMe&#x27;s OWASP Top 10 room: six vulnerability classes, how each exploit actually works, and the fix I&#x27;d push for as a defender.">
+<meta property="og:url" content="https://charithareddymr.github.io/posts/owasp-top-10-hands-on.html">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23121519'/%3E%3Ctext x='32' y='42' font-family='monospace' font-size='26' font-weight='700' fill='%23fbfbf9' text-anchor='middle'%3ECR%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script>
+  try { var t = localStorage.getItem('theme'); } catch (e) {}
+  document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="../index.html"><b>Charitha Reddy</b><span>security engineering</span></a>
+    <nav>
+      <a href="../index.html#writing" class="hide-sm">Writing</a>
+      <a href="../projects.html" class="hide-sm">Projects</a>
+      <a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="toggle" id="toggle" aria-label="Toggle dark mode">☾</button>
+    </nav>
+  </header>
+
+  <article class="post">
+    <a class="back" href="../index.html#writing">← All writing</a>
+    <div class="post-meta">
+      <span class="id">CR-2025-002</span>
+      <span class="tag t-lab">LAB</span>
+      <span>3 min read</span>
+    </div>
+    <h1>Working the OWASP Top 10 by hand: PortSwigger and TryHackMe</h1>
+    <p class="lede">During my application-security internship I worked through the PortSwigger Web Security Academy and TryHackMe&#x27;s OWASP Top 10 room. Reading about a vulnerability and exploiting one are different things; the labs made the mechanics concrete. These are the six classes I spent the most time on, each with how the attack works and the fix I&#x27;d actually push for in review.</p>
+    
+<h2>SQL injection</h2>
+<p>The labs start where it always starts: user input concatenated into a query. Entering <code>' OR 1=1--</code> in a login turns the WHERE clause into something always true; a <code>UNION SELECT</code> pulls data out of other tables. The ones that stuck were blind injection, where you confirm the flaw through boolean responses or a timing payload like <code>'; IF (...) WAITFOR DELAY '0:0:5'--</code> rather than visible output.</p>
+<p><strong>Fix:</strong> parameterized queries, every time. The driver sends the query structure and the data separately, so input can never become SQL. ORMs do this by default; the danger is their raw-SQL escape hatches. Least-privilege database accounts limit the blast radius if one slips through.</p>
+
+<h2>Cross-site scripting (XSS)</h2>
+<p>Reflected XSS bounces a script out of a search parameter; stored XSS persists it in a comment or profile so it fires for every viewer; DOM XSS never touches the server, the page's own JavaScript writes attacker input into a sink like <code>innerHTML</code>. The lesson was that the sink matters as much as the source.</p>
+<p><strong>Fix:</strong> context-aware output encoding (HTML, attribute, JS, URL each differ), a strong Content-Security-Policy as a second layer, and for DOM XSS, safe sinks like <code>textContent</code> instead of <code>innerHTML</code>.</p>
+
+<h2>Broken access control</h2>
+<p>The one most relevant to my day job. Changing an ID in <code>/account?id=1234</code> to read someone else's data (IDOR), or calling an admin API directly because the only control was a hidden button. Authentication asks "who are you?"; access control asks "are you allowed to do this?", and the second check is the one that goes missing.</p>
+<p><strong>Fix:</strong> enforce an ownership check on the server for every object access, deny by default, and centralize the authorization decision instead of scattering it across handlers. Hiding a UI element is not a control.</p>
+
+<h2>Server-side request forgery (SSRF)</h2>
+<p>You get the server to make a request for you: point a URL parameter at <code>http://169.254.169.254/</code> to reach a cloud metadata endpoint, or at internal services behind the firewall. The labs covered the evasions too, alternate IP encodings and open-redirect chains to slip past naive allow-lists.</p>
+<p><strong>Fix:</strong> allow-list the destinations the server may call rather than block-listing bad ones, resolve and validate the host, and block link-local and internal ranges. On AWS, enforcing IMDSv2 removes the classic metadata target.</p>
+
+<h2>Authentication</h2>
+<p>Username enumeration from different error messages or response timings, brute-forcing weak lockout logic, and flawed password-reset and "stay logged in" flows. Small design gaps that each hand an attacker one more step.</p>
+<p><strong>Fix:</strong> identical responses whether or not an account exists, rate limiting and lockout, multi-factor authentication, and reset tokens that are random, single-use and short-lived.</p>
+
+<h2>Cross-site request forgery (CSRF)</h2>
+<p>A page on another site silently submits a state-changing request to an app you're logged into, riding your session cookie. The labs showed how missing, predictable or improperly validated anti-CSRF tokens open the door.</p>
+<p><strong>Fix:</strong> anti-CSRF tokens tied to the session, <code>SameSite</code> cookies (Lax or Strict), and re-authentication for the highest-impact actions.</p>
+
+<h2>What carried over</h2>
+<p>The same root cause runs through most of them: <strong>the server trusting something it didn't verify</strong>, a query built from input, an object ID, a destination URL, a request's origin. The labs were an attacker's lens on problems I review from the defender's side, and doing the exploit by hand made the fixes feel less like checklist items and more like the obvious answer.</p>
+
+    
+    <h2>More writing</h2>
+    <ul><li><a class="inline" href="jwt-validation-failures.html">Five ways JWT validation fails, and how to test for them</a></li><li><a class="inline" href="bot-iot-row-id-leakage.html">The row ID that scored 100%: data leakage in the Bot-IoT dataset</a></li><li><a class="inline" href="indirect-prompt-injection-rag.html">Hiding instructions in a document: indirect prompt injection in a RAG chatbot</a></li><li><a class="inline" href="access-control-in-retrieval.html">Access control belongs in the retrieval layer, not the prompt</a></li><li><a class="inline" href="guardduty-auto-containment.html">Quarantining a compromised EC2 instance in seconds with GuardDuty and Lambda</a></li><li><a class="inline" href="tryhackme-vulnversity.html">TryHackMe Vulnversity: enumeration to root</a></li></ul>
+  </article>
+
+  <footer>
+    <span>© 2026 Charitha Reddy</span>
+    <div><a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a><a href="https://www.linkedin.com/in/charitha-reddy-896204201" target="_blank" rel="noopener">LinkedIn ↗</a></div>
+  </footer>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('toggle');
+    function paint() { btn.textContent = root.dataset.theme === 'dark' ? '☀' : '☾'; }
+    paint();
+    btn.onclick = function () {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+      paint();
+    };
+  })();
+</script>
+</body>
+</html>

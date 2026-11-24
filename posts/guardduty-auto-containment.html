@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quarantining a compromised EC2 instance in seconds with GuardDuty and Lambda · Charitha Reddy</title>
+<meta name="description" content="An event-driven responder that isolates instances, preserves disk evidence and disables leaked keys, plus the gotchas: default egress rules, temporary credentials, and why it ships in dry-run mode.">
+<meta name="author" content="Charitha Reddy">
+<link rel="canonical" href="https://charithareddymr.github.io/posts/guardduty-auto-containment.html">
+<meta property="og:type" content="article">
+<meta property="og:title" content="Quarantining a compromised EC2 instance in seconds with GuardDuty and Lambda · Charitha Reddy">
+<meta property="og:description" content="An event-driven responder that isolates instances, preserves disk evidence and disables leaked keys, plus the gotchas: default egress rules, temporary credentials, and why it ships in dry-run mode.">
+<meta property="og:url" content="https://charithareddymr.github.io/posts/guardduty-auto-containment.html">
+<meta name="twitter:card" content="summary">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' fill='%23121519'/%3E%3Ctext x='32' y='42' font-family='monospace' font-size='26' font-weight='700' fill='%23fbfbf9' text-anchor='middle'%3ECR%3C/text%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600&family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="../assets/site.css">
+<script>
+  try { var t = localStorage.getItem('theme'); } catch (e) {}
+  document.documentElement.dataset.theme = t || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+</script>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <a class="brand" href="../index.html"><b>Charitha Reddy</b><span>security engineering</span></a>
+    <nav>
+      <a href="../index.html#writing" class="hide-sm">Writing</a>
+      <a href="../projects.html" class="hide-sm">Projects</a>
+      <a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a>
+      <button class="toggle" id="toggle" aria-label="Toggle dark mode">☾</button>
+    </nav>
+  </header>
+
+  <article class="post">
+    <a class="back" href="../index.html#writing">← All writing</a>
+    <div class="post-meta">
+      <span class="id">CR-2026-001</span>
+      <span class="tag t-cloud">CLOUD</span>
+      <span>3 min read</span>
+    </div>
+    <h1>Quarantining a compromised EC2 instance in seconds with GuardDuty and Lambda</h1>
+    <p class="lede">When GuardDuty raises a high-severity finding at 3 a.m., the first minutes matter most. This responder takes the first containment steps automatically: it isolates the instance, snapshots its disks for forensics, disables a leaked access key, and emails the team what it did.</p>
+    
+<h2>The flow</h2>
+<pre><code>GuardDuty finding
+  -&gt; EventBridge rule (severity &gt;= 7)
+    -&gt; Lambda responder
+         EC2 instance  -&gt; quarantine security group + tags + EBS snapshots
+         IAM user key  -&gt; deactivate the access key
+         anything else -&gt; notify only
+    -&gt; SNS email to the security team
+    -&gt; failed deliveries -&gt; SQS dead-letter queue</code></pre>
+<p>Everything is Terraform. GuardDuty severities of 7 to 8.9 are High and 9 to 10 Critical, so the default threshold of 7 means only High and Critical findings trigger automatic action; lower ones stay with humans.</p>
+
+<h2>Isolating an instance</h2>
+<p>The responder moves the instance into a quarantine security group with no inbound and no outbound rules, then tags it and starts snapshots of every attached EBS volume for forensics. Two gotchas showed up while building it.</p>
+<p><strong>New security groups allow all outbound traffic by default.</strong> Creating an empty group isn't enough: you have to revoke its default egress rule, or the "quarantined" instance can still reach the internet.</p>
+<pre><code># New security groups allow all outbound traffic by default.
+# Remove every egress rule (IPv4 and IPv6) so nothing can leave.
+egress = group.get("IpPermissionsEgress", [])
+if egress:
+    ec2.revoke_security_group_egress(GroupId=sg_id, IpPermissions=egress)</code></pre>
+<p><strong>Snapshot before anything destructive.</strong> The responder never stops or terminates the instance. The disks are evidence, and a snapshot preserves them for investigation.</p>
+<p>Two safety valves keep automation from causing an outage: instances tagged <code>AutoResponseExempt=true</code> are skipped by policy (some systems need a human decision), and an instance that's already isolated isn't processed twice.</p>
+
+<h2>Disabling a leaked key</h2>
+<p>For credential findings, the responder deactivates the IAM user's access key. Deactivated, not deleted, so it can be restored if the finding turns out to be benign. Keys are masked in the notification email, so the alert doesn't spread the secret further.</p>
+<p>The catch is <strong>temporary credentials</strong>. Keys starting with <code>ASIA</code> belong to roles and sessions and can't simply be switched off. The responder recognises them, takes no automatic action, and tells a human to revoke the role's active sessions. Doing nothing loudly is better than doing the wrong thing quietly.</p>
+
+<h2>Shipping it safely</h2>
+<ul>
+<li><strong>Dry run by default.</strong> A fresh deployment only reports what it <em>would</em> do. Automated response that can isolate production servers should earn trust before it gets the power.</li>
+<li><strong>Least-privilege IAM.</strong> Each write permission (create the quarantine group, swap security groups, snapshot volumes, tag, deactivate a key, publish the alert) is its own statement scoped to resource ARNs in the account. Only the two read-only describe calls use <code>*</code>, because AWS doesn't allow scoping them.</li>
+<li><strong>Encrypted everything.</strong> SNS, SQS, CloudWatch Logs and the Lambda's settings use one customer-managed KMS key.</li>
+<li><strong>Failures are loud.</strong> If an AWS call fails, the responder still sends the notification and then raises, so the event is retried; repeated failures land in the dead-letter queue.</li>
+<li><strong>Checked in CI.</strong> Every push runs 13 unit tests against fake AWS clients, a Bandit scan of the Python, <code>terraform validate</code>, and a Checkov scan of the infrastructure.</li>
+</ul>
+
+<h2>Limitations</h2>
+<ul>
+<li>Changing a security group may not cut connections that are already established and tracked. A stricter response could add a network ACL deny or stop the instance after the snapshot completes.</li>
+<li>EBS snapshots capture disks, not memory. Volatile evidence such as running processes or in-memory malware needs a separate capture step before isolation.</li>
+<li>Automation handles the first minutes, not the incident. Root cause, scoping and recovery still need people.</li>
+</ul>
+
+    <div class="repo"><span>Code, tests and full results</span><a href="https://github.com/charithareddymr/aws-threat-containment" target="_blank" rel="noopener">aws-threat-containment on GitHub ↗</a></div>
+    <h2>More writing</h2>
+    <ul><li><a class="inline" href="jwt-validation-failures.html">Five ways JWT validation fails, and how to test for them</a></li><li><a class="inline" href="bot-iot-row-id-leakage.html">The row ID that scored 100%: data leakage in the Bot-IoT dataset</a></li><li><a class="inline" href="indirect-prompt-injection-rag.html">Hiding instructions in a document: indirect prompt injection in a RAG chatbot</a></li><li><a class="inline" href="access-control-in-retrieval.html">Access control belongs in the retrieval layer, not the prompt</a></li><li><a class="inline" href="owasp-top-10-hands-on.html">Working the OWASP Top 10 by hand: PortSwigger and TryHackMe</a></li><li><a class="inline" href="tryhackme-vulnversity.html">TryHackMe Vulnversity: enumeration to root</a></li></ul>
+  </article>
+
+  <footer>
+    <span>© 2026 Charitha Reddy</span>
+    <div><a href="https://github.com/charithareddymr" target="_blank" rel="noopener">GitHub ↗</a><a href="https://www.linkedin.com/in/charitha-reddy-896204201" target="_blank" rel="noopener">LinkedIn ↗</a></div>
+  </footer>
+</div>
+<script>
+  (function () {
+    var root = document.documentElement, btn = document.getElementById('toggle');
+    function paint() { btn.textContent = root.dataset.theme === 'dark' ? '☀' : '☾'; }
+    paint();
+    btn.onclick = function () {
+      root.dataset.theme = root.dataset.theme === 'dark' ? 'light' : 'dark';
+      try { localStorage.setItem('theme', root.dataset.theme); } catch (e) {}
+      paint();
+    };
+  })();
+</script>
+</body>
+</html>
